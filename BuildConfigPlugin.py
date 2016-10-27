@@ -5,14 +5,34 @@ import sys
 import os
 import sublime
 import sublime_plugin
-import pipes
 import subprocess
+import threading
+import traceback
 from .buildconfig import buildconfig
 from .buildconfig import runpersistent
 
 config_cache = None
 config_cache_mtimes = {}
-def load_config(view):
+busy = False
+last_target_by_file = {}
+
+
+def panel_erase():
+    output = sublime.active_window().create_output_panel('buildconfig')
+    output.run_command('erase_view')
+    output.set_read_only(True)
+    sublime.active_window().run_command('show_panel', {'panel': 'output.buildconfig'})
+
+def panel_print(txt):
+    output = sublime.active_window().find_output_panel('buildconfig')
+    output.set_read_only(False)
+    output.run_command('append', {'characters': str(txt)})
+    output.set_read_only(True)
+    sublime.active_window().run_command('show_panel', {'panel': 'output.buildconfig'})
+
+
+
+def load_config(path):
     global config_cache, config_cache_mtimes
     if config_cache:
         for (file, time) in config_cache_mtimes.items():
@@ -25,18 +45,28 @@ def load_config(view):
     if config_cache:
         return config_cache
     try:
-        config = buildconfig.BuildConfig.load_at_path(view.file_name())
+        config = buildconfig.BuildConfig.load_at_path(path)
     except Exception as e:
-        view.show_popup('BuildConfig error: ' + str(e), max_width=500)
+        print("config error", e)
+        panel_print('%s\n' % traceback.format_exc(e))
         raise
     config_cache_mtimes = dict([ (file, os.stat(file).st_mtime) for file in set([i.params['config_file'] for i in config.targets.values()]) ])
     config_cache = config
     return config
 
 
+
 def perform_command(command, view):
-    print(">", command)
-    view.show_popup(repr(command))
+    def pipestream(fp):
+        def run():
+            while True:
+                line = fp.readline()
+                if len(line) == 0:
+                    break
+                panel_print(line.decode('utf-8'))
+        thread = threading.Thread(target=run)
+        thread.start()
+    panel_print('> ' + repr(command) + '\n')
     cmd = [command.get_shell()] if command.is_shell() else command.get_cmd()
     cwd = command.get_cwd()
     env = command.get_env()
@@ -52,22 +82,44 @@ def perform_command(command, view):
                 env=env
             )
     else:
-        view.window().run_command('exec', {
-            'cmd': cmd,
-            'working_dir': cwd,
-            'quiet': True,
-            'shell': command.is_shell(),
-            'env': env
-        })
-        # @TODO: wait for it??
+        proc = subprocess.Popen(
+            cmd,
+            cwd=cwd,
+            env=env,
+            shell=command.is_shell(),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        )
+        pipestream(proc.stdout)
+        pipestream(proc.stderr)
+        ret = proc.wait()
+        if ret != 0:
+            panel_print('[ERR] return code %d\n' % ret)
+        else:
+            panel_print('> success')
 
 
-last_target_by_file = {}
+
+
+
 def perform_target(target, view):
+    global busy, last_target_by_file
+    busy = True
     last_target_by_file[view.file_name()] = target.name
+    panel_erase()
+    panel_print("> %s\n" % target.name)
     target._config.params['file'] = view.file_name()
-    for command in target.get_commands():
-        perform_command(command, view)
+    def run():
+        try:
+            for command in target.get_commands():
+                perform_command(command, view)
+        except Exception as e:
+            traceback.print_exc(e)
+            panel_print('[ERROR] %s\n' % traceback.format_exc(e))
+        busy = False
+    thread = threading.Thread(target=run)
+    thread.start()
+
 
 
 
@@ -76,10 +128,10 @@ def perform_target(target, view):
 
 class BuildconfigLastCommand(sublime_plugin.TextCommand):
     def run(self, edit):
-        if not self.view.file_name():
+        if not self.view.file_name() or busy:
             return
         sublime.active_window().run_command('save_all')
-        config = load_config(self.view)
+        config = load_config(self.view.file_name())
         if not config:
             return
         if self.view.file_name() in last_target_by_file:
@@ -91,10 +143,10 @@ class BuildconfigLastCommand(sublime_plugin.TextCommand):
 
 class BuildconfigRunCommand(sublime_plugin.TextCommand):
     def run(self, edit):
-        if not self.view.file_name():
+        if not self.view.file_name() or busy:
             return
         sublime.active_window().run_command('save_all')
-        config = load_config(self.view)
+        config = load_config(self.view.file_name())
         if not config:
             return
         targets = config.get_targets_for_file(self.view.file_name()) + config.get_global_targets()

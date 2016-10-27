@@ -88,7 +88,10 @@ class SchemaDict(collections.MutableMapping):
         return repr(self.store)
 
     def __getattr__(self, key):
-        return self[key]
+        try:
+            return self[key]
+        except KeyError as e:
+            raise AttributeError(str(e))
 
     @classmethod
     def from_dict(cls, src):

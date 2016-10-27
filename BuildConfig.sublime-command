@@ -1,3 +1,4 @@
 [
-    { "caption": "BuildConfig: run", "command": "build_config_run" },
+    { "caption": "BuildConfig: run", "command": "buildconfig_run" },
+    { "caption": "BuildConfig: run last config", "command": "buildconfig_last" },
 ]

@@ -1,7 +1,7 @@
 [
     {
-        "id" : "ContextID",
+        "id" : "buildconfig_run",
         "caption" : "BuildConfig: Run",
-        "command" : "build_config_run"
+        "command" : "buildconfig_run"
     }
 ]

@@ -47,9 +47,10 @@ def load_config(path):
     try:
         config = buildconfig.BuildConfig.load_at_path(path)
     except Exception as e:
-        print("config error", e)
-        panel_print('%s\n' % traceback.format_exc(e))
-        raise
+        tb = traceback.format_exc()
+        panel_erase()
+        panel_print('[buildconfig config error] %s\n' % tb)
+        return None
     config_cache_mtimes = dict([ (file, os.stat(file).st_mtime) for file in set([i.params['config_file'] for i in config.targets.values()]) ])
     config_cache = config
     return config
@@ -94,7 +95,7 @@ def perform_command(command, view):
         pipestream(proc.stderr)
         ret = proc.wait()
         if ret != 0:
-            panel_print('[ERR] return code %d\n' % ret)
+            panel_print('[ERROR] return code %d\n' % ret)
         else:
             panel_print('> success')
 
@@ -114,8 +115,8 @@ def perform_target(target, view):
             for command in target.get_commands():
                 perform_command(command, view)
         except Exception as e:
-            traceback.print_exc(e)
-            panel_print('[ERROR] %s\n' % traceback.format_exc(e))
+            tb = traceback.format_exc()
+            panel_print('[ERROR] %s\n' % tb)
         busy = False
     thread = threading.Thread(target=run)
     thread.start()

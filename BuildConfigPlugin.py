@@ -44,7 +44,7 @@ def load_config(path):
 
 
 
-def perform_command(command, view):
+def perform_command(command):
     def pipestream(fp):
         def run():
             while True:
@@ -88,18 +88,18 @@ def perform_command(command, view):
 
 
 
-def perform_target(target, view):
+def perform_target(target, file):
     global busy, last_target_by_file
     busy = True
     try:
-        last_target_by_file[view.file_name()] = target.name
+        last_target_by_file[file] = target.name
         panel_erase()
         panel_print("> %s\n" % target.name)
-        target._config.params['file'] = view.file_name()
+        target._config.params['file'] = file
         def run():
             try:
                 for command in target.get_commands():
-                    perform_command(command, view)
+                    perform_command(command)
             except Exception as e:
                 tb = traceback.format_exc()
                 panel_print('[ERROR] %s\n' % tb)
@@ -116,37 +116,39 @@ def perform_target(target, view):
 
 class BuildconfigLastCommand(sublime_plugin.TextCommand):
     def run(self, edit):
-        if not self.view.file_name() or busy:
+        if busy:
             print("busy")
             return
+        file = self.view.file_name() or self.view.window().folders()[0]
         sublime.active_window().run_command('save_all')
-        config = load_config(self.view.file_name())
+        config = load_config(file)
         if not config:
             return
         if self.view.file_name() in last_target_by_file:
-            target = config.get_target_by_name(last_target_by_file[self.view.file_name()])
+            target = config.get_target_by_name(last_target_by_file[file])
             if target:
-                perform_target(target, self.view)
+                perform_target(target, file)
                 return
         self.view.run_command('build_config_run')
 
 class BuildconfigRunCommand(sublime_plugin.TextCommand):
     def run(self, edit):
-        if not self.view.file_name() or busy:
+        if busy:
             print("busy")
             return
+        file = self.view.file_name() or self.view.window().folders()[0]
         sublime.active_window().run_command('save_all')
-        config = load_config(self.view.file_name())
+        config = load_config(file)
         if not config:
             return
-        targets = config.get_targets_for_file(self.view.file_name()) + config.get_global_targets()
+        targets = config.get_targets_for_file(file) + config.get_global_targets()
         if not targets:
             return
         options = [i.name for i in targets]
         def on_selection(index):
             if index == -1: return
             target = config.get_target_by_name(options[index])
-            perform_target(target, self.view)
+            perform_target(target, file)
         if len(options) == 1 and config.get_target_by_name(options[0]).files:
             on_selection(0)
         else:

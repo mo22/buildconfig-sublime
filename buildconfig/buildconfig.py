@@ -10,11 +10,11 @@ import os
 import json
 import hashlib
 import fnmatch
-import yaml
 import re
 import collections
 import pipes
 import shlex
+import yaml
 
 
 
@@ -355,8 +355,8 @@ class BuildConfig(SchemaDict):
         with open(path, 'r') as fp:
             res = cls.from_dict(json.load(fp))
             for i in res.targets.values():
-                i.params['config_file'] = path
-                i.params['config_dir'] = os.path.dirname(path)+'/'
+                i.params['config_file'] = os.path.abspath(path)
+                i.params['config_dir'] = os.path.dirname(os.path.abspath(path))+'/'
             return res
 
     @classmethod
@@ -364,8 +364,8 @@ class BuildConfig(SchemaDict):
         with open(path, 'r') as fp:
             res = cls.from_dict(yaml.load(fp))
             for i in res.targets.values():
-                i.params['config_file'] = path
-                i.params['config_dir'] = os.path.dirname(path)+'/'
+                i.params['config_file'] = os.path.abspath(path)
+                i.params['config_dir'] = os.path.dirname(os.path.abspath(path))+'/'
             return res
 
     @classmethod
@@ -411,51 +411,3 @@ class BuildConfig(SchemaDict):
             if target.name == name:
                 return target
         return None
-
-
-
-
-
-
-if __name__ == '__main__':
-    import subprocess
-    import runpersistent
-
-    def perform_command(command):
-        print(">", command)
-        cmd = [command.get_shell()] if command.is_shell() else command.get_cmd()
-        cwd = command.get_cwd()
-        env = os.environ.copy()
-        env.update(command.get_env())
-        if command.persistent:
-            if command.restart:
-                runpersistent.kill(command.get_persistent_id())
-            runpersistent.open(
-                command.get_persistent_id(),
-                [command.shell] if command.is_shell() else cmd,
-                shell=command.is_shell(),
-                cwd=cwd,
-                env=env
-            )
-        else:
-            proc = subprocess.Popen(
-                cmd,
-                bufsize=0,
-                shell=command.is_shell(),
-                cwd=cwd,
-                env=env
-            )
-            ret = proc.wait()
-            assert ret == 0
-
-    config = BuildConfig.load_at_path(sys.argv[1])
-    targets = config.get_targets_for_file(sys.argv[1]) + config.get_global_targets()
-    if len(sys.argv) < 3:
-        for target in targets:
-            print(target.name)
-    else:
-        target = config.get_target_by_name(sys.argv[2])
-        config.params['file'] = sys.argv[1]
-        for command in target.get_commands():
-            perform_command(command)
-

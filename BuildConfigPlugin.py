@@ -11,6 +11,12 @@ import traceback
 from .buildconfig import buildconfig
 from .buildconfig import runpersistent
 
+try:
+    if sys.platform != 'win32':
+        os.environ["PATH"] += ':/usr/local/bin'
+except:
+    pass
+
 busy = False
 last_target_by_file = {}
 

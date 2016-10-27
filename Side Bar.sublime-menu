@@ -1,0 +1,7 @@
+[
+    {
+        "id" : "SideBarID",
+        "caption" : "BuildConfig: Run",
+        "command" : "build_config_run"
+    }
+]

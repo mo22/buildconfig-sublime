@@ -1,0 +1,10 @@
+[
+    {
+        "keys": ["super+shift+b"],
+        "command": "build_config_run"
+    },
+    {
+        "keys": ["super+b"],
+        "command": "build_config_last"
+    }
+]

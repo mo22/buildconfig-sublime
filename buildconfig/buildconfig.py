@@ -14,8 +14,7 @@ import re
 import collections
 import pipes
 import shlex
-import yaml
-
+from . import yaml
 
 
 class SchemaDict(collections.MutableMapping):
